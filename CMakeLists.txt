@@ -3,7 +3,7 @@ project(llvm-python)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(llvm-python lexer.cpp main.cpp)
+add_executable(llvm-python lexer.cpp ast.cpp main.cpp)
 
 find_package(zstd REQUIRED)
 
