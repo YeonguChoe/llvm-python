@@ -1,7 +1,6 @@
 // Lexer: Analyze text in source code into tokens
 
 #include "lexer.h"
-#include <string>
 #include <cctype>
 #include <cstdio>
 
