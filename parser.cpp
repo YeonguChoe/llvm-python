@@ -168,6 +168,18 @@ static std::unique_ptr<SignatureASTNode> ParseSignature() {
     return std::make_unique<SignatureASTNode>(FunctionName, std::move(ArgumentNames));
 }
 
+static std::unique_ptr<FunctionASTNode> ParseDefinition() {
+    getNextToken();
+    auto Signature = ParseSignature();
+    if (!Signature) {
+        return nullptr;
+    }
+    if (auto E = ParseExpression()) {
+        return std::make_unique<FunctionASTNode>(std::move(Signature), std::move(E));
+    }
+    return nullptr;
+}
+
 static std::unique_ptr<SignatureASTNode> ParseExtern() {
     getNextToken();
     return ParseSignature();
@@ -179,4 +191,51 @@ static std::unique_ptr<FunctionASTNode> ParseTopLevelExpression() {
         return std::make_unique<FunctionASTNode>(std::move(Signature), std::move(E));
     }
     return nullptr;
+}
+
+// Top Level parsing
+static void HandleDefinition() {
+    if (ParseDefinition()) {
+        fprintf(stderr, "Parsed a function definition.\n");
+    } else {
+        getNextToken();
+    }
+}
+
+static void HandleExtern() {
+    if (ParseExtern()) {
+        fprintf(stderr, "Parsed an extern\n");
+    } else {
+        getNextToken();
+    }
+}
+
+static void HandleTopLevelExpression() {
+    if (ParseTopLevelExpression()) {
+        fprintf(stderr, "Parsed a top-level expression\n");
+    } else {
+        getNextToken();
+    }
+}
+
+static void MainLoop() {
+    while (true) {
+        fprintf(stderr, ">>> ");
+        switch (CurrentToken) {
+            case tok_eof:
+                return;
+            case ';':
+                getNextToken();
+                break;
+            case tok_def:
+                HandleDefinition();
+                break;
+            case tok_extern:
+                HandleExtern();
+                break;
+            default:
+                HandleTopLevelExpression();
+                break;
+        }
+    }
 }
