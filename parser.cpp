@@ -1,8 +1,8 @@
 #include "ast.h"
 #include "lexer.h"
+#include "parser.h"
 #include <cstdio>
 #include <map>
-#include <memory>
 #include <vector>
 #include <string>
 #include <cctype>
@@ -10,8 +10,11 @@
 using namespace ASTNode;
 
 static std::unique_ptr<ExpressionASTNode> ParseExpression();
+
 static std::unique_ptr<ExpressionASTNode> ParsePrimaryExpression();
-static std::unique_ptr<ExpressionASTNode> ParseBinaryOperatorRHS(int ExpressionPrecedence,std::unique_ptr<ExpressionASTNode> LHS);
+
+static std::unique_ptr<ExpressionASTNode> ParseBinaryOperatorRHS(int ExpressionPrecedence,
+                                                                 std::unique_ptr<ExpressionASTNode> LHS);
 
 static int CurrentToken;
 
@@ -34,8 +37,8 @@ static std::unique_ptr<ExpressionASTNode> ParseExpression() {
     if (!LHS) {
         return nullptr;
     } else {
-LHS = ParseBinaryOperatorRHS(0, std::move(LHS));
-  return std::move(LHS);
+        LHS = ParseBinaryOperatorRHS(0, std::move(LHS));
+        return std::move(LHS);
     }
 };
 
