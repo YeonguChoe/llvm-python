@@ -3,7 +3,7 @@ project(llvm-python)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(main main.cpp lexer.cpp parser.cpp)
+add_executable(main main.cpp lexer.cpp parser.cpp codegen.cpp)
 
 # LLVM (https://llvm.org/docs/CMake.html#id19)
 find_package(LLVM REQUIRED CONFIG)
