@@ -2,19 +2,75 @@
 #include "ast.h"
 #include "parser.h"
 
+
 std::unique_ptr<llvm::LLVMContext> TheContext; // Tool set
 std::unique_ptr<llvm::IRBuilder<> > Builder; // Generate IR
 std::unique_ptr<llvm::Module> TheModule; // IR code container
 std::map<std::string, llvm::Value *> NamedValues; // Symbol table
 
-void InitializeModule() {
+// Manager
+// Transform pass
+std::unique_ptr<llvm::FunctionPassManager> TheFPM; // Container for Function Passes
+
+// Analysis pass
+std::unique_ptr<llvm::LoopAnalysisManager> TheLAM; // Loop analyzer
+std::unique_ptr<llvm::FunctionAnalysisManager> TheFAM; // Function analyzer
+std::unique_ptr<llvm::CGSCCAnalysisManager> TheCGAM; // Call graph SCC detector
+std::unique_ptr<llvm::ModuleAnalysisManager> TheMAM; // Module analyzer
+
+// Debugger
+std::unique_ptr<llvm::PassInstrumentationCallbacks> ThePIC; // Pass debugger register
+std::unique_ptr<llvm::StandardInstrumentations> TheSI; // Pass debugger toolkit
+
+std::unique_ptr<JIT> TheJit;
+
+std::map<std::string, std::unique_ptr<ASTNode::SignatureASTNode> > Signatures;
+
+llvm::ExitOnError ExitOnErr;
+
+void InitializeModuleAndManagers() {
+    // Context, Builder, Module
     TheContext = std::make_unique<llvm::LLVMContext>();
     Builder = std::make_unique<llvm::IRBuilder<> >(*TheContext);
     TheModule = std::make_unique<llvm::Module>("JIT", *TheContext);
+    TheModule->setDataLayout(TheJit->getDataLayout());
+
+    // Manager
+    TheFPM = std::make_unique<llvm::FunctionPassManager>();
+    TheLAM = std::make_unique<llvm::LoopAnalysisManager>();
+    TheFAM = std::make_unique<llvm::FunctionAnalysisManager>();
+    TheCGAM = std::make_unique<llvm::CGSCCAnalysisManager>();
+    TheMAM = std::make_unique<llvm::ModuleAnalysisManager>();
+    ThePIC = std::make_unique<llvm::PassInstrumentationCallbacks>();
+    TheSI = std::make_unique<llvm::StandardInstrumentations>(*TheContext, true);
+    TheSI->registerCallbacks(*ThePIC, TheMAM.get());
+
+    // Add transform passes
+    TheFPM->addPass(llvm::InstCombinePass());
+    TheFPM->addPass(llvm::ReassociatePass());
+    TheFPM->addPass(llvm::GVNPass());
+    TheFPM->addPass(llvm::SimplifyCFGPass());
+
+    llvm::PassBuilder PB;
+    PB.registerModuleAnalyses(*TheMAM);
+    PB.registerFunctionAnalyses(*TheFAM);
+    PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
 }
 
 llvm::Value *LogErrorV(const char *str) {
     LogError(str);
+    return nullptr;
+}
+
+llvm::Function *getFunction(std::string Name) {
+    auto *Function = TheModule->getFunction(Name);
+    if (Function != nullptr) {
+        return Function;
+    }
+    auto FI = Signatures.find(Name);
+    if (FI != Signatures.end()) {
+        return FI->second->codegen();
+    }
     return nullptr;
 }
 
@@ -40,7 +96,7 @@ llvm::Value *ASTNode::BinaryExpressionASTNode::codegen() {
 
     switch (Operator) {
         case '+':
-            return Builder->CreateAdd(L, R, "addtmp");
+            return Builder->CreateFAdd(L, R, "addtmp");
         case '-':
             return Builder->CreateSub(L, R, "subtmp");
         case '*':
@@ -54,7 +110,7 @@ llvm::Value *ASTNode::BinaryExpressionASTNode::codegen() {
 }
 
 llvm::Value *ASTNode::FunctionCallExpressionASTNode::codegen() {
-    llvm::Function *CalleeFunction = TheModule->getFunction(Callee);
+    llvm::Function *CalleeFunction = getFunction(Callee);
 
     if (CalleeFunction == nullptr) {
         return LogErrorV("Unknown function referenced");
@@ -88,10 +144,13 @@ llvm::Function *ASTNode::SignatureASTNode::codegen() {
 }
 
 llvm::Function *ASTNode::FunctionASTNode::codegen() {
-    llvm::Function *TheFunction = TheModule->getFunction(Signature->getName());
+    auto &P = *Signature;
+    Signatures[Signature->getName()] = std::move(Signature);
+
+    llvm::Function *TheFunction = TheModule->getFunction(P.getName());
 
     if (TheFunction == nullptr) {
-        TheFunction = Signature->codegen();
+        TheFunction = P.codegen();
     }
 
     if (TheFunction == nullptr) {
@@ -118,5 +177,6 @@ llvm::Function *ASTNode::FunctionASTNode::codegen() {
     }
     Builder->CreateRet(ReturnValue);
     llvm::verifyFunction(*TheFunction);
+    TheFPM->run(*TheFunction, *TheFAM);
     return TheFunction;
 }
