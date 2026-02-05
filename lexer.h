@@ -9,6 +9,10 @@ enum Token {
     tok_extern = -3, // external function
     tok_identifier = -4, // identifier
     tok_number = -5, // number literal
+    // Conditional statement
+    tok_if = -6,
+    tok_then = -7,
+    tok_else = -8,
 };
 
 extern std::string IdentifierStr;

@@ -68,6 +68,18 @@ namespace ASTNode {
         llvm::Value *codegen() override;
     };
 
+    class IfExpressionASTNode : public ExpressionASTNode {
+        // Each of them are AST nodes
+        std::unique_ptr<ExpressionASTNode> Condition, Then, Else;
+
+    public:
+        IfExpressionASTNode(std::unique_ptr<ExpressionASTNode> Condition, std::unique_ptr<ExpressionASTNode> Then,
+                            std::unique_ptr<ExpressionASTNode> Else) : Condition(std::move(Condition)),
+                                                                       Then(std::move(Then)), Else(std::move(Else)) {
+        }
+        llvm::Value *codegen() override;
+    };
+
     class SignatureASTNode {
         std::string Name;
         std::vector<std::string> Arguments;

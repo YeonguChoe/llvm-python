@@ -94,6 +94,38 @@ static std::unique_ptr<ExpressionASTNode> ParseIdentifierExpression() {
     return std::make_unique<FunctionCallExpressionASTNode>(IdName, std::move(Arguments));
 }
 
+static std::unique_ptr<ExpressionASTNode> ParseIfExpression() {
+    getNextToken(); // Process if token
+
+    auto ConditionNode = ParseExpression(); // Create Condition AST Node
+    if (ConditionNode == nullptr) {
+        return nullptr;
+    }
+
+    if (CurrentToken != tok_then) {
+        return LogError("Expected Then");
+    }
+    getNextToken(); // Process Then token
+
+    auto ThenNode = ParseExpression(); // Create Then AST Node
+    if (ThenNode == nullptr) {
+        return nullptr;
+    }
+
+    if (CurrentToken != tok_else) {
+        return LogError("Expected Else");
+    }
+    getNextToken(); // Process Else token
+
+    auto ElseNode = ParseExpression(); // Create Else AST Node
+    if (ElseNode == nullptr) {
+        return nullptr;
+    }
+
+    // Return IfExpressionASTNode
+    return std::make_unique<IfExpressionASTNode>(std::move(ConditionNode), std::move(ThenNode), std::move(ElseNode));
+}
+
 static std::unique_ptr<ExpressionASTNode> ParsePrimaryExpression() {
     switch (CurrentToken) {
         case tok_identifier:
@@ -102,6 +134,8 @@ static std::unique_ptr<ExpressionASTNode> ParsePrimaryExpression() {
             return ParseNumberExpression();
         case '(':
             return ParseParenthesisExpression();
+        case tok_if:
+            return ParseIfExpression();
         default:
             return LogError("unexpected token");
     }
