@@ -35,10 +35,31 @@ int gettok() {
             return Token::tok_def;
         }
 
-        // check if it is a external function
-        else if (IdentifierStr == "extern") {
+        // check if it is an external function
+        if (IdentifierStr == "extern") {
             return Token::tok_extern;
         }
+
+        if (IdentifierStr == "if") {
+            return Token::tok_if;
+        }
+
+        if (IdentifierStr == "then") {
+            return Token::tok_then;
+        }
+
+        if (IdentifierStr == "else") {
+            return Token::tok_else;
+        }
+
+        if (IdentifierStr == "for") {
+            return Token::tok_for;
+        }
+
+        if (IdentifierStr == "in") {
+            return Token::tok_in;
+        }
+
         return Token::tok_identifier;
     }
 

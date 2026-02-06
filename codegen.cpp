@@ -131,6 +131,119 @@ llvm::Value *ASTNode::FunctionCallExpressionASTNode::codegen() {
     return Builder->CreateCall(CalleeFunction, ArgumentsVector, "calltmp");
 }
 
+llvm::Value *ASTNode::IfExpressionASTNode::codegen() {
+    llvm::Value *ConditionValue = Condition->codegen();
+    if (ConditionValue == nullptr) {
+        return nullptr;
+    }
+
+    ConditionValue = Builder->CreateFCmpONE(ConditionValue, llvm::ConstantFP::get(*TheContext, llvm::APFloat(0.0)),
+                                            "ifcond");
+
+    // Create Then, Else, Continue Blocks
+    llvm::Function *TheFunction = Builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock *ThenBB = llvm::BasicBlock::Create(*TheContext, "then", TheFunction);
+    llvm::BasicBlock *ElseBB = llvm::BasicBlock::Create(*TheContext, "else");
+    llvm::BasicBlock *MergeBB = llvm::BasicBlock::Create(*TheContext, "ifcont");
+    Builder->CreateCondBr(ConditionValue, ThenBB, ElseBB);
+
+    // Write Then block
+    Builder->SetInsertPoint(ThenBB);
+    llvm::Value *ThenValue = Then->codegen();
+    if (ThenValue == nullptr) {
+        return nullptr;
+    }
+    Builder->CreateBr(MergeBB);
+
+    // Save Then block starting point
+    ThenBB = Builder->GetInsertBlock();
+
+    // Write Else block
+    TheFunction->insert(TheFunction->end(), ElseBB);
+    Builder->SetInsertPoint(ElseBB);
+    llvm::Value *ElseValue = Else->codegen();
+
+    if (ElseValue == nullptr) {
+        return nullptr;
+    }
+
+    Builder->CreateBr(MergeBB);
+    ElseBB = Builder->GetInsertBlock();
+
+    // Write Merge block
+    TheFunction->insert(TheFunction->end(), MergeBB);
+    Builder->SetInsertPoint(MergeBB);
+    llvm::PHINode *PN = Builder->CreatePHI(llvm::Type::getDoubleTy(*TheContext), 2, "iftmp");
+
+    PN->addIncoming(ThenValue, ThenBB);
+    PN->addIncoming(ElseValue, ElseBB);
+
+    return PN;
+}
+
+llvm::Value *ASTNode::ForExpressionASTNode::codegen() {
+    llvm::Value *StartValue = Start->codegen();
+    if (StartValue == nullptr) {
+        return nullptr;
+    }
+
+    llvm::Function *TheFunction = Builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock *PreheaderBB = Builder->GetInsertBlock();
+    llvm::BasicBlock *LoopBB = llvm::BasicBlock::Create(*TheContext, "loop", TheFunction);
+    Builder->CreateBr(LoopBB);
+
+    Builder->SetInsertPoint(LoopBB);
+    llvm::PHINode *Variable = Builder->CreatePHI(llvm::Type::getDoubleTy(*TheContext), 2, VariableName);
+    Variable->addIncoming(StartValue, PreheaderBB);
+
+
+    llvm::Value *OuterVariableValue = NamedValues[VariableName];
+    NamedValues[VariableName] = Variable;
+
+    llvm::Value *BodyValue = Body->codegen();
+    if (BodyValue == nullptr) {
+        return nullptr;
+    }
+
+    // Step
+    llvm::Value *StepVariable = nullptr;
+    if (Step != nullptr) {
+        StepVariable = Step->codegen();
+        if (StepVariable == nullptr) {
+            return nullptr;
+        }
+    } else {
+        StepVariable = llvm::ConstantFP::get(*TheContext, llvm::APFloat(1.0)); // Default value for Step
+    }
+
+    llvm::Value *NextLoopVariable = Builder->CreateFAdd(Variable, StepVariable, "nextloopvariable");
+
+
+    // End
+    llvm::Value *EndCondition = End->codegen();
+    if (EndCondition == nullptr) {
+        return nullptr;
+    }
+    EndCondition = Builder->CreateFCmpONE(EndCondition, llvm::ConstantFP::get(*TheContext, llvm::APFloat(0.0)),
+                                          "loopcondition");
+
+    llvm::BasicBlock *LoopEndBB = Builder->GetInsertBlock();
+    llvm::BasicBlock *AfterBB = llvm::BasicBlock::Create(*TheContext, "afterloop", TheFunction);
+
+    Builder->CreateCondBr(EndCondition, LoopBB, AfterBB);
+    Builder->SetInsertPoint(AfterBB);
+
+    Variable->addIncoming(NextLoopVariable, LoopEndBB);
+
+    if (OuterVariableValue != nullptr) {
+        NamedValues[VariableName] = OuterVariableValue;
+    } else {
+        NamedValues.erase(VariableName);
+    }
+    return llvm::Constant::getNullValue(llvm::Type::getDoubleTy(*TheContext));
+}
+
+
 llvm::Function *ASTNode::SignatureASTNode::codegen() {
     std::vector<llvm::Type *> Doubles(Arguments.size(), llvm::Type::getDoubleTy(*TheContext));
     llvm::FunctionType *FT = llvm::FunctionType::get(llvm::Type::getDoubleTy(*TheContext), Doubles, false);

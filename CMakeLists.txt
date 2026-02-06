@@ -3,7 +3,7 @@ project(llvm-python)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(main main.cpp lexer.cpp parser.cpp codegen.cpp)
+add_executable(main main.cpp lexer.cpp parser.cpp codegen.cpp library.cpp)
 
 # LLVM (https://llvm.org/docs/CMake.html#id19)
 find_package(LLVM REQUIRED CONFIG)
@@ -17,3 +17,5 @@ llvm_map_components_to_libnames(llvm_libs support core irreader passes orcjit
 )
 
 target_link_libraries(main ${llvm_libs})
+
+target_link_options(main PRIVATE -rdynamic -fuse-ld=lld)
